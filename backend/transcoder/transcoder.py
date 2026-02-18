@@ -29,11 +29,6 @@ from transcoder.models import (
 
 logger = logging.getLogger(__name__)
 
-# How long the health monitor sleeps between process-alive checks (seconds).
-_HEALTH_POLL_INTERVAL: int = 3
-# How long the health monitor waits after launch before its first check.
-_HEALTH_STARTUP_DELAY: int = 2
-
 
 class StreamTranscoder:
     """
@@ -497,8 +492,11 @@ class StreamTranscoder:
                 try:
                     self.process.kill()
                     self.process.wait(timeout=3)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning(
+                        "[%s] Error killing old process during restart: %s",
+                        self.stream_id, exc,
+                    )
                 self.process = None
 
         try:
@@ -661,7 +659,8 @@ class StreamTranscoder:
                         yield chunk
                     else:
                         break
-                except Exception:
+                except Exception as exc:
+                    logger.debug("[%s] Stream read error: %s", self.stream_id, exc)
                     break
 
         except GeneratorExit:
@@ -716,10 +715,10 @@ class StreamTranscoder:
         Monitor FFmpeg process health and trigger auto-restart on failure.
 
         Runs in a background daemon thread.  Checks the process every
-        ``_HEALTH_POLL_INTERVAL`` seconds and restarts up to
+        ``config.stream.health_poll_interval`` seconds and restarts up to
         ``config.ffmpeg.max_retries`` times using exponential backoff.
         """
-        time.sleep(_HEALTH_STARTUP_DELAY)
+        time.sleep(config.stream.health_startup_delay)
 
         while True:
             with self._lock:
@@ -766,7 +765,7 @@ class StreamTranscoder:
                     self.info.set_error("Max restart attempts exceeded")
                     break
 
-            time.sleep(_HEALTH_POLL_INTERVAL)
+            time.sleep(config.stream.health_poll_interval)
 
     def _parse_ffmpeg_progress(self, line: str) -> None:
         """

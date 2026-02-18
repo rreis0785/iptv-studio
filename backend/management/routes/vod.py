@@ -5,7 +5,7 @@ VOD (Video on Demand) API routes.
 from flask import Blueprint, jsonify, request
 
 from management.services import services
-from management.validators import validate_url
+from management.validators import validate_url, strip_readonly_fields
 
 bp = Blueprint('vod', __name__, url_prefix='/api/vod')
 
@@ -34,8 +34,8 @@ def list_vod():
 @bp.route('', methods=['POST'])
 def create_vod():
     """Create a new VOD item."""
-    data = request.get_json() or {}
-    
+    data = strip_readonly_fields(request.get_json() or {})
+
     required = ['name', 'url', 'playlist_id']
     for field in required:
         if not data.get(field):
@@ -113,8 +113,13 @@ def get_vod(vod_id: str):
 @bp.route('/<vod_id>', methods=['PUT', 'PATCH'])
 def update_vod(vod_id: str):
     """Update a VOD item."""
-    data = request.get_json() or {}
-    
+    data = strip_readonly_fields(request.get_json() or {})
+
+    if 'url' in data and data['url']:
+        url_error = validate_url(data['url'])
+        if url_error:
+            return jsonify({'error': url_error}), 400
+
     try:
         vod = services.vod.update(vod_id, data)
         if not vod:

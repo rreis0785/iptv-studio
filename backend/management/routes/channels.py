@@ -5,7 +5,8 @@ Channel API routes (Live Streams).
 from flask import Blueprint, jsonify, request
 
 from management.services import services
-from management.validators import validate_channel_data, validate_url
+from management.validators import validate_channel_data, validate_url, strip_readonly_fields
+from management.limiter import limiter
 
 bp = Blueprint('channels', __name__, url_prefix='/api/channels')
 
@@ -32,8 +33,8 @@ def list_channels():
 @bp.route('', methods=['POST'])
 def create_channel():
     """Create a new channel."""
-    data = request.get_json() or {}
-    
+    data = strip_readonly_fields(request.get_json() or {})
+
     required = ['name', 'url', 'playlist_id']
     for field in required:
         if not data.get(field):
@@ -54,6 +55,7 @@ def create_channel():
 
 
 @bp.route('/bulk', methods=['POST'])
+@limiter.limit("10 per minute")
 def bulk_create_channels():
     """Create multiple channels."""
     data = request.get_json() or {}
@@ -113,8 +115,13 @@ def get_channel(channel_id: str):
 @bp.route('/<channel_id>', methods=['PUT', 'PATCH'])
 def update_channel(channel_id: str):
     """Update a channel."""
-    data = request.get_json() or {}
-    
+    data = strip_readonly_fields(request.get_json() or {})
+
+    if 'url' in data and data['url']:
+        url_error = validate_url(data['url'])
+        if url_error:
+            return jsonify({'error': url_error}), 400
+
     try:
         channel = services.channels.update(channel_id, data)
         if not channel:

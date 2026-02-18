@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from flask import Blueprint, jsonify, request
 
 from management.services import services
+from management.validators import strip_readonly_fields
 
 bp = Blueprint('epg', __name__, url_prefix='/api/epg')
 
@@ -52,8 +53,8 @@ def list_programs():
 @bp.route('', methods=['POST'])
 def create_program():
     """Create a new EPG program."""
-    data = request.get_json() or {}
-    
+    data = strip_readonly_fields(request.get_json() or {})
+
     required = ['channel_id', 'title', 'start_time', 'end_time']
     for field in required:
         if not data.get(field):
@@ -124,8 +125,8 @@ def get_program(program_id: str):
 @bp.route('/<program_id>', methods=['PUT', 'PATCH'])
 def update_program(program_id: str):
     """Update an EPG program."""
-    data = request.get_json() or {}
-    
+    data = strip_readonly_fields(request.get_json() or {})
+
     # Parse datetime strings
     try:
         if isinstance(data.get('start_time'), str):

@@ -6,6 +6,10 @@ Provides REST endpoints for scanning URLs and managing scan jobs.
 
 import asyncio
 import logging
+import time
+from collections import defaultdict
+from threading import Lock
+
 from flask import Blueprint, jsonify, request
 
 from scanner.scanner import MediaScanner
@@ -17,6 +21,36 @@ bp = Blueprint('scanner', __name__, url_prefix='/api/scanner')
 
 # Global scanner instance
 _scanner = MediaScanner()
+
+# ---------------------------------------------------------------------------
+# Simple in-process rate limiter
+# ---------------------------------------------------------------------------
+
+_rate_cache: dict = defaultdict(list)
+_rate_lock = Lock()
+
+
+def _is_rate_limited(key: str, max_requests: int, window_seconds: int) -> bool:
+    """
+    Return True if the caller has exceeded the allowed request rate.
+
+    Stores timestamps per key; evicts entries outside the rolling window.
+    Thread-safe via a module-level lock.
+    """
+    now = time.monotonic()
+    with _rate_lock:
+        timestamps = _rate_cache[key]
+        _rate_cache[key] = [t for t in timestamps if now - t < window_seconds]
+        if len(_rate_cache[key]) >= max_requests:
+            return True
+        _rate_cache[key].append(now)
+        return False
+
+
+def _scan_rate_limit() -> bool:
+    """Check per-IP rate limit for scan endpoints (10 req/min)."""
+    key = f"scan:{request.remote_addr or 'unknown'}"
+    return _is_rate_limited(key, max_requests=10, window_seconds=60)
 
 
 def run_async(coro):
@@ -47,19 +81,25 @@ def scan_url():
     Returns:
         ScanResult with discovered media items
     """
+    if _scan_rate_limit():
+        return jsonify({'error': 'Rate limit exceeded', 'message': '10 scans per minute allowed'}), 429
+
     data = request.get_json() or {}
-    
+
     url = data.get('url')
     if not url:
         return jsonify({'error': 'url is required'}), 400
-    
+
+    # Bound caller-supplied max_items to prevent abuse
+    max_items = min(int(data.get('max_items', 50)), 200)
+
     try:
         result = run_async(_scanner.scan(
             url=url,
             include_live=data.get('include_live', True),
             include_vod=data.get('include_vod', True),
-            max_items=data.get('max_items', 50),
-            max_depth=data.get('max_depth', 2),
+            max_items=max_items,
+            max_depth=min(int(data.get('max_depth', 2)), 5),
             follow_links=data.get('follow_links', True),
         ))
         
@@ -88,12 +128,15 @@ def scan_batch():
     Returns:
         List of ScanResults
     """
+    if _scan_rate_limit():
+        return jsonify({'error': 'Rate limit exceeded', 'message': '10 scans per minute allowed'}), 429
+
     data = request.get_json() or {}
-    
+
     urls = data.get('urls', [])
     if not urls:
         return jsonify({'error': 'urls array is required'}), 400
-    
+
     if len(urls) > 10:
         return jsonify({'error': 'Maximum 10 URLs per batch'}), 400
     

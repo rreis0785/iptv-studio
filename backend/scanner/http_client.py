@@ -73,7 +73,6 @@ class HttpClient:
         max_retries: int = 3,
         retry_delay: float = 1.0,
         requests_per_second: float = 2.0,
-        requests_per_second: float = 2.0,
         user_agents: List[str] = None,
         proxies: List[str] = None,
     ):
@@ -96,15 +95,14 @@ class HttpClient:
         self._session = None
     
     async def _get_session(self):
-        """Get or create aiohttp session."""
+        """Get or create aiohttp ClientSession (lazy initialisation)."""
         if self._session is None:
             try:
                 import aiohttp
                 timeout = aiohttp.ClientTimeout(total=self.timeout)
-                self._session = aiohttp.Session(timeout=timeout)
+                self._session = aiohttp.ClientSession(timeout=timeout)
             except ImportError:
-                # Fall back to synchronous requests
-                pass
+                logger.debug("aiohttp not available; HTTP calls will use urllib fallback")
         return self._session
     
     async def _rate_limit(self, domain: str) -> None:
@@ -238,45 +236,51 @@ class HttpClient:
         json_data: Any = None,
         allow_redirects: bool = True,
     ) -> HttpResponse:
-        """Perform the actual HTTP request."""
+        """Perform the actual HTTP request, reusing the shared aiohttp session."""
+        session = await self._get_session()
+
+        if session is None:
+            # aiohttp unavailable — fall back to urllib
+            return await self._urllib_request(
+                method, url, headers, params, data, json_data
+            )
+
         try:
             import aiohttp
-            
-            async with aiohttp.ClientSession() as session:
-                kwargs = {
-                    'headers': headers,
-                    'allow_redirects': allow_redirects,
-                    'timeout': aiohttp.ClientTimeout(total=self.timeout),
-                }
-                
-                if params:
-                    kwargs['params'] = params
-                if data:
-                    kwargs['data'] = data
-                if json_data:
-                    kwargs['json'] = json_data
-                if json_data:
-                    kwargs['json'] = json_data
-                
-                # Get proxy for this request
-                proxy = self._get_proxy()
-                if proxy:
-                    kwargs['proxy'] = proxy
-                
-                async with session.request(method, url, **kwargs) as resp:
-                    text = await resp.text()
-                    content = await resp.read()
-                    
-                    return HttpResponse(
-                        url=str(resp.url),
-                        status_code=resp.status,
-                        headers=dict(resp.headers),
-                        text=text,
-                        content=content,
-                    )
-                    
+
+            kwargs: Dict[str, Any] = {
+                'headers': headers,
+                'allow_redirects': allow_redirects,
+            }
+
+            if params:
+                kwargs['params'] = params
+            if data:
+                kwargs['data'] = data
+            if json_data:
+                kwargs['json'] = json_data
+
+            # Get proxy for this request
+            proxy = self._get_proxy()
+            if proxy:
+                kwargs['proxy'] = proxy
+
+            async with session.request(method, url, **kwargs) as resp:
+                content = await resp.read()
+                try:
+                    text = content.decode(resp.charset or 'utf-8', errors='replace')
+                except (LookupError, TypeError):
+                    text = content.decode('utf-8', errors='replace')
+
+                return HttpResponse(
+                    url=str(resp.url),
+                    status_code=resp.status,
+                    headers=dict(resp.headers),
+                    text=text,
+                    content=content,
+                )
+
         except ImportError:
-            # Fall back to urllib (synchronous)
             return await self._urllib_request(
                 method, url, headers, params, data, json_data
             )
@@ -314,8 +318,8 @@ class HttpClient:
         req = urllib.request.Request(url, data=request_data, headers=headers, method=method)
         
         try:
-            # Run in thread pool to not block
-            loop = asyncio.get_event_loop()
+            # Run in thread pool to not block the event loop
+            loop = asyncio.get_running_loop()
             response = await loop.run_in_executor(
                 None,
                 lambda: urllib.request.urlopen(req, timeout=self.timeout)

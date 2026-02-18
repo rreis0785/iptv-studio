@@ -24,11 +24,18 @@ VIDEO_COPYABLE_CODECS  Comma-separated copy-safe codecs   (default: h264,avc,h26
 HLS_SEGMENT_DURATION   Seconds per HLS segment            (default: 6)
 HLS_PLAYLIST_SIZE      Segments kept in playlist          (default: 5)
 HLS_SEGMENT_DIR        Directory for HLS segment files    (default: <tempdir>/iptv-transcoder-hls)
-STREAM_BUFFER_SIZE     Read buffer size in bytes          (default: 8192)
-MAX_CONCURRENT_STREAMS Maximum simultaneous streams       (default: 10)
-MAX_STREAMS_PER_IP     Maximum streams per client IP      (default: 3)
-STREAM_IDLE_TIMEOUT    Seconds before idle stream stops   (default: 300)
-HOST                   Server bind address                (default: 0.0.0.0)
+STREAM_BUFFER_SIZE         Read buffer size in bytes            (default: 8192)
+MAX_CONCURRENT_STREAMS     Maximum simultaneous streams         (default: 10)
+MAX_STREAMS_PER_IP         Maximum streams per client IP        (default: 3)
+STREAM_IDLE_TIMEOUT        Seconds before idle stream stops     (default: 300)
+STREAM_CLEANUP_INTERVAL    Seconds between cleanup sweeps       (default: 60)
+STREAM_HEALTH_POLL         Seconds between health-monitor polls (default: 3)
+STREAM_HEALTH_STARTUP      Seconds before first health poll     (default: 2)
+FFMPEG_RECONNECT_DELAY_MAX Max reconnect back-off seconds       (default: 5)
+FFMPEG_LOGLEVEL            FFmpeg stderr log level              (default: warning)
+FFMPEG_STDERR_BUFFER       Lines of stderr to keep in memory    (default: 1000)
+HLS_CLEANUP_DELAY          Seconds to keep segments after stop  (default: 30)
+HOST                       Server bind address                  (default: 0.0.0.0)
 PORT                   Server bind port                   (default: 5000)
 DEBUG                  Enable Flask debug mode            (default: false)
 LOG_LEVEL              Logging level name                 (default: INFO)
@@ -108,11 +115,15 @@ class FFmpegConfig:
     probe_timeout: int = field(default_factory=lambda: _env_int('FFMPEG_PROBE_TIMEOUT', 10))
     read_timeout: int = field(default_factory=lambda: _env_int('FFMPEG_READ_TIMEOUT', 30))
 
-    reconnect_delay_max: int = 5
+    reconnect_delay_max: int = field(
+        default_factory=lambda: _env_int('FFMPEG_RECONNECT_DELAY_MAX', 5)
+    )
 
     # Logging
-    loglevel: str = 'warning'
-    stderr_buffer_lines: int = 1000
+    loglevel: str = field(default_factory=lambda: _env_str('FFMPEG_LOGLEVEL', 'warning'))
+    stderr_buffer_lines: int = field(
+        default_factory=lambda: _env_int('FFMPEG_STDERR_BUFFER', 1000)
+    )
 
     # Retry settings
     max_retries: int = field(default_factory=lambda: _env_int('FFMPEG_MAX_RETRIES', 3))
@@ -161,7 +172,9 @@ class HLSConfig:
         )
     )
     segment_format: str = 'mpegts'
-    cleanup_delay: int = 30  # seconds to keep segments after stream stops
+    cleanup_delay: int = field(
+        default_factory=lambda: _env_int('HLS_CLEANUP_DELAY', 30)
+    )
 
 
 @dataclass
@@ -169,7 +182,15 @@ class StreamConfig:
     """Stream management configuration."""
 
     buffer_size: int = field(default_factory=lambda: _env_int('STREAM_BUFFER_SIZE', 8192))
-    cleanup_interval: int = 60   # seconds
+    cleanup_interval: int = field(
+        default_factory=lambda: _env_int('STREAM_CLEANUP_INTERVAL', 60)
+    )
+    health_poll_interval: int = field(
+        default_factory=lambda: _env_int('STREAM_HEALTH_POLL', 3)
+    )
+    health_startup_delay: int = field(
+        default_factory=lambda: _env_int('STREAM_HEALTH_STARTUP', 2)
+    )
     idle_timeout: int = field(default_factory=lambda: _env_int('STREAM_IDLE_TIMEOUT', 300))
     max_concurrent: int = field(default_factory=lambda: _env_int('MAX_CONCURRENT_STREAMS', 10))
     max_per_ip: int = field(default_factory=lambda: _env_int('MAX_STREAMS_PER_IP', 3))

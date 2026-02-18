@@ -5,6 +5,7 @@ Group (Category) API routes.
 from flask import Blueprint, jsonify, request
 
 from management.services import services
+from management.validators import strip_readonly_fields
 
 bp = Blueprint('groups', __name__, url_prefix='/api/groups')
 
@@ -29,8 +30,8 @@ def list_groups():
 @bp.route('', methods=['POST'])
 def create_group():
     """Create a new group."""
-    data = request.get_json() or {}
-    
+    data = strip_readonly_fields(request.get_json() or {})
+
     required = ['name', 'playlist_id']
     for field in required:
         if not data.get(field):
@@ -83,8 +84,8 @@ def get_group(group_id: str):
 @bp.route('/<group_id>', methods=['PUT', 'PATCH'])
 def update_group(group_id: str):
     """Update a group."""
-    data = request.get_json() or {}
-    
+    data = strip_readonly_fields(request.get_json() or {})
+
     group = services.groups.update(group_id, data)
     if not group:
         return jsonify({'error': 'Group not found'}), 404

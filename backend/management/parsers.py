@@ -174,15 +174,15 @@ class M3UParser:
                     try:
                         entry['channel_number'] = int(chno)
                     except ValueError:
-                        pass
-                
+                        logger.debug("M3U: ignoring non-integer tvg-chno=%r", chno)
+
                 # TVG shift
                 if shift := attrs.get('tvg-shift', ''):
                     try:
                         entry['tvg_shift'] = int(shift)
                     except ValueError:
-                        pass
-                
+                        logger.debug("M3U: ignoring non-integer tvg-shift=%r", shift)
+
                 # Catchup
                 if catchup := attrs.get('catchup', ''):
                     entry['catchup_type'] = catchup
@@ -191,7 +191,7 @@ class M3UParser:
                         try:
                             entry['catchup_days'] = int(days)
                         except ValueError:
-                            pass
+                            logger.debug("M3U: ignoring non-integer catchup-days=%r", days)
                 
                 # VOD detection: negative duration or file extensions
                 is_vod = _is_vod_url(url) or duration > 0
@@ -394,13 +394,13 @@ class XMLParser:
                     try:
                         entry['channel_number'] = int(chno)
                     except ValueError:
-                        pass
-                
+                        logger.debug("XML: ignoring non-integer channel_number=%r", chno)
+
                 if shift := ch_elem.get('tvg-shift', ch_elem.get('tvg_shift', '')):
                     try:
                         entry['tvg_shift'] = int(shift)
                     except ValueError:
-                        pass
+                        logger.debug("XML: ignoring non-integer tvg_shift=%r", shift)
                 
                 result.channels.append(entry)
         
@@ -425,13 +425,13 @@ class XMLParser:
                     try:
                         vod_entry['duration'] = int(duration)
                     except ValueError:
-                        pass
-                
+                        logger.debug("XML: ignoring non-integer duration=%r", duration)
+
                 if year := item_elem.get('year', ''):
                     try:
                         vod_entry['year'] = int(year)
                     except ValueError:
-                        pass
+                        logger.debug("XML: ignoring non-integer year=%r", year)
                 
                 if plot := item_elem.get('plot', ''):
                     vod_entry['plot'] = plot
