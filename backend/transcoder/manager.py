@@ -205,13 +205,17 @@ class StreamManager:
             transcoder = self._streams.get(stream_id)
             if not transcoder:
                 return False
-            
-            transcoder.stop()
-            del self._streams[stream_id]
-            
+
+            try:
+                transcoder.stop()
+            except Exception as exc:
+                logger.error("Error stopping stream %s: %s", stream_id, exc)
+            finally:
+                self._streams.pop(stream_id, None)
+
             logger.info(
-                f"Stopped stream {stream_id} "
-                f"(remaining: {len(self._streams)})"
+                "Stopped stream %s (remaining: %d)",
+                stream_id, len(self._streams),
             )
             return True
     

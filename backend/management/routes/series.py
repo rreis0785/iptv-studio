@@ -5,6 +5,7 @@ Series API routes.
 from flask import Blueprint, jsonify, request
 
 from management.services import services
+from management.validators import strip_readonly_fields
 
 bp = Blueprint('series', __name__, url_prefix='/api/series')
 
@@ -25,8 +26,8 @@ def list_series():
 @bp.route('', methods=['POST'])
 def create_series():
     """Create a new series."""
-    data = request.get_json() or {}
-    
+    data = strip_readonly_fields(request.get_json() or {})
+
     required = ['name', 'playlist_id']
     for field in required:
         if not data.get(field):
@@ -54,8 +55,8 @@ def get_series(series_id: str):
 @bp.route('/<series_id>', methods=['PUT', 'PATCH'])
 def update_series(series_id: str):
     """Update a series."""
-    data = request.get_json() or {}
-    
+    data = strip_readonly_fields(request.get_json() or {})
+
     series = services.series.update(series_id, data)
     if not series:
         return jsonify({'error': 'Series not found'}), 404

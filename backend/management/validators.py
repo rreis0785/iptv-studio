@@ -13,6 +13,19 @@ from management.config import config
 logger = logging.getLogger(__name__)
 
 
+# Fields managed exclusively by the server — never accepted from API clients.
+_READONLY_FIELDS = frozenset({'id', 'created_at', 'updated_at'})
+
+
+def strip_readonly_fields(data: dict) -> dict:
+    """
+    Remove system-managed fields from user-submitted request data.
+
+    Prevents callers from overriding auto-generated IDs or timestamps.
+    """
+    return {k: v for k, v in data.items() if k not in _READONLY_FIELDS}
+
+
 def validate_url(url: str) -> Optional[str]:
     """
     Validate a stream URL.

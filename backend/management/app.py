@@ -9,6 +9,7 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 
 from management.config import config
+from management.limiter import limiter
 from management.storage import storage
 
 
@@ -33,6 +34,9 @@ def create_app(test_config: dict = None) -> Flask:
     if test_config:
         app.config.update(test_config)
     
+    # Initialise rate limiter
+    limiter.init_app(app)
+
     # Configure CORS
     CORS(app, resources={
         r"/api/*": {

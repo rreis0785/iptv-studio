@@ -5,6 +5,8 @@ Playlist API routes.
 from flask import Blueprint, jsonify, request
 
 from management.services import services
+from management.validators import strip_readonly_fields
+from management.limiter import limiter
 
 bp = Blueprint('playlists', __name__, url_prefix='/api/playlists')
 
@@ -22,11 +24,11 @@ def list_playlists():
 @bp.route('', methods=['POST'])
 def create_playlist():
     """Create a new playlist."""
-    data = request.get_json() or {}
-    
+    data = strip_readonly_fields(request.get_json() or {})
+
     if not data.get('name'):
         return jsonify({'error': 'Name is required'}), 400
-    
+
     try:
         playlist = services.playlists.create(**data)
         return jsonify(playlist.to_dict()), 201
@@ -46,8 +48,8 @@ def get_playlist(playlist_id: str):
 @bp.route('/<playlist_id>', methods=['PUT', 'PATCH'])
 def update_playlist(playlist_id: str):
     """Update a playlist."""
-    data = request.get_json() or {}
-    
+    data = strip_readonly_fields(request.get_json() or {})
+
     playlist = services.playlists.update(playlist_id, data)
     if not playlist:
         return jsonify({'error': 'Playlist not found'}), 404
@@ -74,6 +76,7 @@ def set_default_playlist(playlist_id: str):
 
 
 @bp.route('/import', methods=['POST'])
+@limiter.limit("10 per minute")
 def import_playlist():
     """
     Import playlist from file or content.

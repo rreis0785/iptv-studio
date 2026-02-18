@@ -2,9 +2,12 @@
 Scanner configuration settings.
 """
 
+import logging
 import os
 from dataclasses import dataclass, field
 from typing import List, Optional
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -49,8 +52,8 @@ class NetworkConfig:
                     with open(self.proxy_file, 'r') as f:
                         file_proxies = [line.strip() for line in f if line.strip() and not line.startswith('#')]
                         self.proxies.extend(file_proxies)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning("Failed to load proxy file %s: %s", self.proxy_file, e)
 
 
 @dataclass
