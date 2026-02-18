@@ -1,0 +1,13 @@
+# IPTV Playlist Management Backend Dependencies
+
+# Web framework
+flask>=2.3.0
+
+# CORS support
+flask-cors>=4.0.0
+
+# Production WSGI server (Windows-compatible)
+waitress>=2.1.0
+
+# Type hints (Python 3.9+)
+typing-extensions>=4.0.0;python_version<"3.10"
